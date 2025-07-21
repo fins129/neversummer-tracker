@@ -5,13 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Never Summer Live Tracker</title>
 
-  <!-- Mapbox GL JS -->
+  <!-- Mapbox -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet" />
 
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
-    body, html { margin: 0; padding: 0; height: 100%; }
-    #map { width: 100%; height: 100%; }
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    #map {
+      width: 100%;
+      height: 70%;
+    }
+    #elevationChart {
+      width: 100%;
+      height: 30%;
+    }
     .aid-marker {
       background-color: #ff6600;
       border-radius: 50%;
@@ -23,42 +39,58 @@
 </head>
 <body>
   <div id="map"></div>
+  <canvas id="elevationChart"></canvas>
 
   <script>
-    // 1. Your Mapbox Token
+    // 1. Mapbox token
     mapboxgl.accessToken = 'pk.eyJ1IjoiZmluczEyOSIsImEiOiJjbWRkYTAxcXIwMmdvMnJwc2xodjF4b3M5In0.58QcMA8Zo_BPNLORLz5Sug';
 
     // 2. Initialize Map
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/mapbox/outdoors-v12',
-      center: [-105.9, 40.5], // Rough center of course
+      center: [-105.92, 40.52],
       zoom: 11
     });
     map.addControl(new mapboxgl.NavigationControl());
 
-    // 3. Aid Stations (Update coords as needed)
-   const aidStations = [
-  { name: "Michigan Ditch (mile 11.4)", coords: [-105.8797, 40.4975] },
-  { name: "Diamond Aid (mile 19.5)", coords: [-105.921469, 40.505442] },
-  { name: "Mongomery (mile 25.5)", coords: [-105.921469, 40.505442] },
-  { name: "Ruby Jewel Aid (mile 31.6)", coords: [-105.914, 40.513] },
-  { name: "Kelly Lake (mile 36.3)", coords: [-105.914, 40.513] },
-  { name: "Clear Lake 1 (40.9)", coords: [-105.95, 40.542] },
-  { name: "Clear Lake 2 (45.3)", coords: [-105.95, 40.542] },
-  { name: "Canadian Aid (mile 51.5)", coords: [-105.971943, 40.559134] },
-  { name: "Bockman Aid (mile 57.4)", coords: [-105.971943, 40.559134] },
-  { name: "Ranger Lakes Aid (63.6)", coords: [-105.97, 40.57] }
-];
+    // 3. Aid Stations (decimal coordinates)
+    const aidStations = [
+      { name: "Michigan Ditch (mile 11.4)", coords: [-105.8797, 40.4975] },
+      { name: "Diamond Aid (mile 19.5)", coords: [-105.9081, 40.5039] },
+      { name: "Montgomery (mile 25.5)", coords: [-105.9139, 40.5542] },
+      { name: "Ruby Jewel Aid (mile 31.6)", coords: [-105.9633, 40.5842] },
+      { name: "Clear Lake 1&2 (40.9 & 45.3)", coords: [-106.0022, 40.6553] },
+      { name: "Canadian Aid (mile 51.5)", coords: [-106.0081, 40.6147] },
+      { name: "Bockman Aid (mile 57.4)", coords: [-105.9717, 40.5592] },
+      { name: "Ranger Lakes Aid (63.6)", coords: [-105.9675, 40.5036] }
+    ];
 
+    // 4. Variables for elevation chart
+    let elevationChart;
+    let elevationData = [];
+    let elevationLabels = [];
+    let coursePoints = [];
 
+    // 5. Map load
     map.on('load', () => {
       console.log("Map fully loaded!");
 
-      // 4. Load Course GeoJSON
+      // Draw course line
       fetch('course.geojson')
         .then(res => res.json())
         .then(data => {
+          const coords = data.features[0].geometry.coordinates;
+          let totalDist = 0;
+
+          for (let i = 0; i < coords.length; i++) {
+            if (i > 0) totalDist += distance(coords[i - 1], coords[i]);
+            elevationLabels.push((totalDist / 1000).toFixed(2)); // km
+            elevationData.push(coords[i][2] || 0);
+            coursePoints.push(coords[i]);
+          }
+
+          // Add course line
           map.addSource('course', { type: 'geojson', data: data });
           map.addLayer({
             id: 'course-line',
@@ -66,10 +98,35 @@
             source: 'course',
             paint: { 'line-color': '#FF0000', 'line-width': 3 }
           });
+
+          // Build elevation chart
+          const ctx = document.getElementById('elevationChart').getContext('2d');
+          elevationChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: elevationLabels,
+              datasets: [{
+                label: 'Elevation (m)',
+                data: elevationData,
+                borderColor: 'blue',
+                fill: false,
+                pointRadius: 0
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: { title: { display: true, text: 'Distance (km)' } },
+                y: { title: { display: true, text: 'Elevation (m)' } }
+              },
+              plugins: { legend: { display: false } }
+            }
+          });
         })
         .catch(err => console.error('Error loading course.geojson:', err));
 
-      // 5. Add Aid Station Markers
+      // Add aid station markers
       aidStations.forEach(station => {
         const el = document.createElement('div');
         el.className = 'aid-marker';
@@ -80,12 +137,12 @@
       });
     });
 
-    // 6. Live Garmin Tracking
-    const liveMarker = new mapboxgl.Marker({ color: 'blue' }).setLngLat([-105.888, 40.513]).addTo(map);
+    // 6. Garmin Live Tracking
+    const liveMarker = new mapboxgl.Marker({ color: 'blue' }).setLngLat([-105.88, 40.51]).addTo(map);
 
     async function updateLivePosition() {
       try {
-        const response = await fetch('https://share.garmin.com/Feed/Share/DanFindley'); // <-- Replace YOURNAME
+        const response = await fetch('https://share.garmin.com/Feed/Share/DanFindley');
         const text = await response.text();
         const coordMatch = text.match(/<gx:coord>([-\d.]+) ([-\d.]+)/);
         if (coordMatch) {
@@ -93,6 +150,7 @@
           const lat = parseFloat(coordMatch[2]);
           liveMarker.setLngLat([lng, lat]);
           console.log('Updated live position:', [lng, lat]);
+          updateElevationMarker(lng, lat);
         }
       } catch (e) {
         console.error('Error fetching Garmin position:', e);
@@ -101,7 +159,46 @@
 
     // Update every 5 minutes
     setInterval(updateLivePosition, 300000);
-    updateLivePosition(); // Initial load
+    updateLivePosition();
+
+    // 7. Elevation Marker
+    function updateElevationMarker(lng, lat) {
+      if (!elevationChart || coursePoints.length === 0) return;
+
+      let minDist = Infinity;
+      let closestIndex = 0;
+      for (let i = 0; i < coursePoints.length; i++) {
+        const d = distance([lng, lat], coursePoints[i]);
+        if (d < minDist) {
+          minDist = d;
+          closestIndex = i;
+        }
+      }
+
+      // Add red point on chart
+      elevationChart.data.datasets[1] = {
+        label: 'Current Position',
+        data: elevationData.map((val, idx) => idx === closestIndex ? val : null),
+        borderColor: 'red',
+        backgroundColor: 'red',
+        pointRadius: 5,
+        showLine: false
+      };
+      elevationChart.update();
+    }
+
+    // 8. Distance helper
+    function distance(a, b) {
+      const R = 6371000; // meters
+      const toRad = x => x * Math.PI / 180;
+      const dLat = toRad(b[1] - a[1]);
+      const dLon = toRad(b[0] - a[0]);
+      const lat1 = toRad(a[1]);
+      const lat2 = toRad(b[1]);
+      const x = dLon * Math.cos((lat1 + lat2) / 2);
+      const y = dLat;
+      return Math.sqrt(x * x + y * y) * R;
+    }
   </script>
 </body>
 </html>
