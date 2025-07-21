@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Never Summer Live Tracker + OpenWeatherMap Radar</title>
+  <title>Never Summer Live Tracker (Test Location)</title>
 
   <!-- Mapbox -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
@@ -59,7 +59,7 @@
     }
     #radarControls {
       position: absolute;
-      top: 10px;
+      top: 60px;
       right: 10px;
       background: rgba(255, 255, 255, 0.9);
       padding: 8px 12px;
@@ -102,7 +102,7 @@
     });
     map.addControl(new mapboxgl.NavigationControl());
 
-    // --- Add OpenWeatherMap Precipitation Layer ---
+    // --- Precipitation Layer ---
     map.on('load', () => {
       map.addSource('owm-precipitation', {
         type: 'raster',
@@ -117,8 +117,17 @@
         type: 'raster',
         source: 'owm-precipitation',
         layout: { visibility: 'none' },
-        paint: { 'raster-opacity': 0.7 }
+        paint: {
+          'raster-opacity': 0.75,
+          'raster-hue-rotate': 100,
+          'raster-saturation': 2,
+          'raster-brightness-max': 1.2
+        }
       });
+
+      // Aid stations
+      addAidStations();
+      initCourse();
     });
 
     function toggleRadar() {
@@ -126,7 +135,7 @@
       map.setLayoutProperty('owm-precipitation-layer', 'visibility', checked ? 'visible' : 'none');
     }
 
-    // --- Aid Stations & Elevation Profile ---
+    // --- Aid Stations ---
     const aidStations = [
       { name: "Michigan Ditch (mile 11.4)", coords: [-105.8797, 40.4975], mile: 11.4 },
       { name: "Diamond Aid (mile 19.5)", coords: [-105.9081, 40.5039], mile: 19.5 },
@@ -138,74 +147,18 @@
       { name: "Ranger Lakes Aid (63.6)", coords: [-105.9675, 40.5036], mile: 63.6 }
     ];
 
+    const runnerEl = document.createElement('div');
+    runnerEl.className = 'runner-icon';
+    runnerEl.textContent = '🏃';
+    const liveMarker = new mapboxgl.Marker(runnerEl);
+
     let elevationChart;
     let elevationData = [];
     let elevationLabels = [];
     let coursePoints = [];
     let totalMiles = 0;
 
-    const runnerEl = document.createElement('div');
-    runnerEl.className = 'runner-icon';
-    runnerEl.textContent = '🏃';
-    const liveMarker = new mapboxgl.Marker(runnerEl).setLngLat([-105.88, 40.51]);
-
-    map.on('load', () => {
-      fetch('course.geojson')
-        .then(res => res.json())
-        .then(data => {
-          const coords = data.features[0].geometry.coordinates;
-          let totalDist = 0;
-          for (let i = 0; i < coords.length; i++) {
-            if (i > 0) totalDist += distance(coords[i - 1], coords[i]);
-            elevationLabels.push((totalDist / 1609.34).toFixed(2));
-            const elevFeet = coords[i][2] ? coords[i][2] * 3.28084 : 0;
-            elevationData.push(elevFeet);
-            coursePoints.push(coords[i]);
-          }
-          totalMiles = (totalDist / 1609.34).toFixed(1);
-
-          map.addSource('course', { type: 'geojson', data: data });
-          map.addLayer({
-            id: 'course-line',
-            type: 'line',
-            source: 'course',
-            paint: { 'line-color': '#FF4500', 'line-width': 4, 'line-blur': 1 }
-          });
-
-          const startFlag = document.createElement('div');
-          startFlag.innerHTML = '🚩';
-          new mapboxgl.Marker(startFlag).setLngLat(coursePoints[0]).addTo(map);
-          const finishFlag = document.createElement('div');
-          finishFlag.innerHTML = '🏁';
-          new mapboxgl.Marker(finishFlag).setLngLat(coursePoints[coursePoints.length - 1]).addTo(map);
-
-          const ctx = document.getElementById('elevationChart').getContext('2d');
-          elevationChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-              labels: elevationLabels,
-              datasets: [{
-                label: 'Elevation (ft)',
-                data: elevationData,
-                borderColor: 'blue',
-                fill: false,
-                pointRadius: 0
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                x: { title: { display: true, text: 'Distance (mi)' } },
-                y: { title: { display: true, text: 'Elevation (ft)' } }
-              },
-              plugins: { legend: { display: false } }
-            }
-          });
-
-          liveMarker.addTo(map);
-        });
-
+    function addAidStations() {
       aidStations.forEach(station => {
         const el = document.createElement('div');
         el.className = 'aid-marker';
@@ -214,25 +167,62 @@
           .setPopup(new mapboxgl.Popup().setHTML(`<strong>${station.name}</strong><br>Mile: ${station.mile}`))
           .addTo(map);
       });
-    });
-
-    async function updateLivePosition() {
-      try {
-        const response = await fetch('https://share.garmin.com/Feed/Share/DanFindley');
-        const text = await response.text();
-        const coordMatch = text.match(/<gx:coord>([-\d.]+) ([-\d.]+)/);
-        if (coordMatch) {
-          const lng = parseFloat(coordMatch[1]);
-          const lat = parseFloat(coordMatch[2]);
-          liveMarker.setLngLat([lng, lat]);
-          updateElevationMarker(lng, lat);
-        }
-      } catch (e) {
-        console.error('Error fetching Garmin position:', e);
-      }
     }
-    setInterval(updateLivePosition, 300000);
-    updateLivePosition();
+
+    async function initCourse() {
+      const data = await fetch('course.geojson').then(res => res.json());
+      const coords = data.features[0].geometry.coordinates;
+      let totalDist = 0;
+      for (let i = 0; i < coords.length; i++) {
+        if (i > 0) totalDist += distance(coords[i - 1], coords[i]);
+        elevationLabels.push((totalDist / 1609.34).toFixed(2));
+        const elevFeet = coords[i][2] ? coords[i][2] * 3.28084 : 0;
+        elevationData.push(elevFeet);
+        coursePoints.push(coords[i]);
+      }
+      totalMiles = (totalDist / 1609.34).toFixed(1);
+
+      map.addSource('course', { type: 'geojson', data: data });
+      map.addLayer({
+        id: 'course-line',
+        type: 'line',
+        source: 'course',
+        paint: { 'line-color': '#FF4500', 'line-width': 4, 'line-blur': 1 }
+      });
+
+      // Start/Finish markers
+      new mapboxgl.Marker().setLngLat(coursePoints[0]).setPopup(new mapboxgl.Popup().setText("Start")).addTo(map);
+      new mapboxgl.Marker().setLngLat(coursePoints[coursePoints.length - 1]).setPopup(new mapboxgl.Popup().setText("Finish")).addTo(map);
+
+      const ctx = document.getElementById('elevationChart').getContext('2d');
+      elevationChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: elevationLabels,
+          datasets: [{
+            label: 'Elevation (ft)',
+            data: elevationData,
+            borderColor: 'blue',
+            fill: false,
+            pointRadius: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { title: { display: true, text: 'Distance (mi)' } },
+            y: { title: { display: true, text: 'Elevation (ft)' } }
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      // Simulated location (Diamond Aid)
+      const testLocation = [-105.9081, 40.5039];
+      liveMarker.setLngLat(testLocation).addTo(map);
+      updateElevationMarker(testLocation[0], testLocation[1]);
+    }
 
     function updateElevationMarker(lng, lat) {
       if (!elevationChart || coursePoints.length === 0) return;
