@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RainViewer Radar Test</title>
+  <title>RainViewer Radar Test (CORS Proxy)</title>
 
   <!-- Mapbox -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
@@ -55,9 +55,8 @@
       try {
         const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
         const json = await response.json();
-
-        // Use latest timestamp from nowcast
         const nowcastFrames = json.radar.nowcast;
+
         if (!nowcastFrames || nowcastFrames.length === 0) {
           document.getElementById('lastFrame').textContent = "No radar data";
           return;
@@ -67,18 +66,16 @@
         document.getElementById('lastFrame').textContent =
           new Date(latestTimestamp * 1000).toLocaleTimeString();
 
-        // Remove old layer if exists
         if (map.getSource('rainviewer')) {
           map.removeLayer('rainviewer-layer');
           map.removeSource('rainviewer');
         }
 
-        // Add radar source with v2 tile URL
+        const radarTileUrl = `https://corsproxy.io/?https://tilecache.rainviewer.com/v2/radar/${latestTimestamp}/256/{z}/{x}/{y}/2/1_1.png`;
+
         map.addSource('rainviewer', {
           type: 'raster',
-          tiles: [
-            `https://tilecache.rainviewer.com/v2/radar/${latestTimestamp}/256/{z}/{x}/{y}/2/1_1.png`
-          ],
+          tiles: [radarTileUrl],
           tileSize: 256
         });
 
