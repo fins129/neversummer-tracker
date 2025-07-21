@@ -14,23 +14,21 @@
 
   <style>
     body, html {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-#map {
-  width: 100%;
-  height: 70%;  /* Map gets 70% of screen height */
-}
-
-#elevationChart {
-  width: 100%;
-  height: 30%;  /* Chart gets 30% of screen height */
-  max-height: 300px; /* Optional: cap height on large screens */
-}
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    #map {
+      width: 100%;
+      height: 70%;
+    }
+    #elevationChart {
+      width: 100%;
+      height: 30%;
+      max-height: 300px;
+    }
     .aid-marker {
       background-color: #ff6600;
       border-radius: 50%;
@@ -88,8 +86,9 @@
 
           for (let i = 0; i < coords.length; i++) {
             if (i > 0) totalDist += distance(coords[i - 1], coords[i]);
-            elevationLabels.push((totalDist / 1000).toFixed(2)); // km
-            elevationData.push(coords[i][2] ? coords[i][2] : 0); // elevation
+            elevationLabels.push((totalDist / 1609.34).toFixed(2)); // miles
+            const elevFeet = coords[i][2] ? coords[i][2] * 3.28084 : 0; // feet
+            elevationData.push(elevFeet);
             coursePoints.push(coords[i]);
           }
 
@@ -109,7 +108,7 @@
             data: {
               labels: elevationLabels,
               datasets: [{
-                label: 'Elevation (m)',
+                label: 'Elevation (ft)',
                 data: elevationData,
                 borderColor: 'blue',
                 fill: false,
@@ -120,8 +119,8 @@
               responsive: true,
               maintainAspectRatio: false,
               scales: {
-                x: { title: { display: true, text: 'Distance (km)' } },
-                y: { title: { display: true, text: 'Elevation (m)' } }
+                x: { title: { display: true, text: 'Distance (mi)' } },
+                y: { title: { display: true, text: 'Elevation (ft)' } }
               },
               plugins: { legend: { display: false } }
             }
@@ -190,7 +189,7 @@
       elevationChart.update();
     }
 
-    // 8. Distance helper
+    // 8. Distance helper (meters)
     function distance(a, b) {
       const R = 6371000; // meters
       const toRad = x => x * Math.PI / 180;
