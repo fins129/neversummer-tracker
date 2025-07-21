@@ -69,6 +69,10 @@
       z-index: 999;
       width: 160px;
     }
+    #radarControls button {
+      margin-top: 5px;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
@@ -83,6 +87,7 @@
         <input type="checkbox" id="radarCheckbox" onchange="toggleRadar()" />
         Show Precipitation
       </label>
+      <button id="toggleSimBtn" onclick="toggleSimulation()">Pause Simulation</button>
     </div>
   </div>
   <canvas id="elevationChart"></canvas>
@@ -113,7 +118,7 @@
         type: 'raster',
         source: 'owm-precipitation',
         layout: { visibility: 'none' },
-        paint: { 'raster-opacity': 0.7 }  // Clean default
+        paint: { 'raster-opacity': 0.7 }
       });
 
       addAidStations();
@@ -148,6 +153,8 @@
     let coursePoints = [];
     let totalMiles = 0;
     let simIndex = 0;
+    let simInterval = null;
+    let simRunning = true;
 
     function addAidStations() {
       aidStations.forEach(station => {
@@ -205,18 +212,27 @@
         }
       });
 
-      liveMarker.setLngLat(coursePoints[0]).addTo(map);
+      // Set runner start
+      simIndex = 0;
+      const startLngLat = coursePoints[simIndex];
+      liveMarker.setLngLat(startLngLat).addTo(map);
+      updateElevationMarker(startLngLat[0], startLngLat[1]);
 
       // Start simulation
-      setInterval(simulateRunner, 2000);
+      simInterval = setInterval(simulateRunner, 2000);
     }
 
     function simulateRunner() {
-      if (simIndex >= coursePoints.length) return;
+      if (!simRunning || simIndex >= coursePoints.length) return;
       const [lng, lat] = coursePoints[simIndex];
       liveMarker.setLngLat([lng, lat]);
       updateElevationMarker(lng, lat);
-      simIndex += Math.floor(coursePoints.length / 100); // jump by ~1% each step
+      simIndex += Math.floor(coursePoints.length / 100); // Move ~1% of course each step
+    }
+
+    function toggleSimulation() {
+      simRunning = !simRunning;
+      document.getElementById('toggleSimBtn').textContent = simRunning ? "Pause Simulation" : "Resume Simulation";
     }
 
     function updateElevationMarker(lng, lat) {
