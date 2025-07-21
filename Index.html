@@ -3,14 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Never Summer Live Tracker (Debug)</title>
+  <title>Marker Test - Never Summer Tracker</title>
 
   <!-- Mapbox -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet" />
-
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
     body, html {
@@ -22,27 +19,24 @@
     }
     #map {
       width: 100%;
-      height: 70%;
+      height: 100%;
       position: relative;
-    }
-    #elevationChart {
-      width: 100%;
-      height: 30%;
-      max-height: 300px;
     }
     .runner-icon {
       font-size: 24px;
-      animation: bounce 1s infinite alternate;
-    }
-    @keyframes bounce {
-      0% { transform: translateY(0px); }
-      100% { transform: translateY(-5px); }
+      line-height: 24px;
+      text-align: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: white;
+      border: 2px solid black;
+      box-shadow: 0 0 3px rgba(0,0,0,0.5);
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <canvas id="elevationChart"></canvas>
 
   <script>
     mapboxgl.accessToken = 'pk.eyJ1IjoiZmluczEyOSIsImEiOiJjbWRkYTAxcXIwMmdvMnJwc2xodjF4b3M5In0.58QcMA8Zo_BPNLORLz5Sug';
@@ -50,60 +44,29 @@
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/mapbox/outdoors-v12',
-      center: [-105.92, 40.52],
-      zoom: 11
+      center: [-106.00294, 40.50903],
+      zoom: 12
     });
-
-    const runnerEl = document.createElement('div');
-    runnerEl.className = 'runner-icon';
-    runnerEl.textContent = '🏃';
-    const liveMarker = new mapboxgl.Marker(runnerEl);
-
-    let coursePoints = [];
+    map.addControl(new mapboxgl.NavigationControl());
 
     map.on('load', () => {
-      console.log("Map fully loaded.");
-      initCourse();
+      console.log("Map loaded, adding markers...");
+
+      // Test 1: Default Mapbox Marker (Red)
+      const testRedMarker = new mapboxgl.Marker({ color: 'red' })
+        .setLngLat([-106.00294, 40.50903])
+        .addTo(map);
+      console.log("Red marker added at:", testRedMarker.getLngLat());
+
+      // Test 2: Custom Runner Marker (🏃)
+      const runnerEl = document.createElement('div');
+      runnerEl.className = 'runner-icon';
+      runnerEl.textContent = '🏃';
+      const testRunnerMarker = new mapboxgl.Marker(runnerEl)
+        .setLngLat([-106.005, 40.51])
+        .addTo(map);
+      console.log("Runner marker added at:", testRunnerMarker.getLngLat());
     });
-
-    async function initCourse() {
-      console.log("Fetching course.geojson...");
-      const data = await fetch('course.geojson').then(res => res.json()).catch(err => {
-        console.error("Failed to load course.geojson", err);
-      });
-
-      if (!data || !data.features || !data.features.length) {
-        console.error("GeoJSON is empty or invalid", data);
-        return;
-      }
-
-      console.log("GeoJSON loaded:", data);
-      const coords = data.features[0].geometry.coordinates;
-      console.log(`Number of points in course: ${coords.length}`);
-      console.log("First 5 coordinates:", coords.slice(0, 5));
-
-      // Populate coursePoints
-      coursePoints = coords.map(pt => [pt[0], pt[1]]);
-
-      // Add course line
-      map.addSource('course', { type: 'geojson', data: data });
-      map.addLayer({
-        id: 'course-line',
-        type: 'line',
-        source: 'course',
-        paint: { 'line-color': '#FF4500', 'line-width': 4 }
-      });
-
-      // Place the runner at the first point
-      const start = coursePoints[0];
-      console.log("Setting runner marker to:", start);
-      liveMarker.setLngLat(start).addTo(map);
-
-      // Debug check if marker is on map
-      setTimeout(() => {
-        console.log("Marker current position:", liveMarker.getLngLat());
-      }, 1000);
-    }
   </script>
 </body>
 </html>
