@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Never Summer Live Tracker</title>
+  <title>Never Summer Live Tracker + Open-Meteo Radar</title>
 
   <!-- Mapbox -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
@@ -69,7 +69,7 @@
       z-index: 999;
       width: 160px;
     }
-    #radarControls button, #radarControls input[type=range] {
+    #radarControls button {
       margin-top: 5px;
       width: 100%;
     }
@@ -87,10 +87,6 @@
         <input type="checkbox" id="radarCheckbox" onchange="toggleRadar()" />
         Show Weather Radar
       </label>
-      <button onclick="refreshRadar()">Refresh Radar</button>
-      <button onclick="togglePlay()" id="playBtn">Play</button>
-      <input type="range" id="frameSlider" min="0" max="11" value="11" onchange="setRadarFrame(this.value)">
-      <div style="margin-top:4px;font-size:11px;">Last Update: <span id="radarUpdate">Never</span></div>
     </div>
   </div>
   <canvas id="elevationChart"></canvas>
@@ -106,82 +102,31 @@
     });
     map.addControl(new mapboxgl.NavigationControl());
 
-    let radarFrames = [];
-    let currentFrameIndex = 11;
-    let isPlaying = false;
-    let playInterval = null;
-
-    // Fetch and build radar animation
-    async function addRadarLayer() {
-      const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
-      const json = await response.json();
-      radarFrames = json.radar.nowcast.slice(-12); // last 12 frames
-
-      // Add first radar layer
-      if (map.getSource('rainviewer')) {
-        map.removeLayer('rainviewer-layer');
-        map.removeSource('rainviewer');
-      }
-
-      map.addSource('rainviewer', {
+    // --- Add Open-Meteo Radar Layer ---
+    map.on('load', () => {
+      map.addSource('openmeteo-radar', {
         type: 'raster',
         tiles: [
-          `https://tilecache.rainviewer.com/v3/radar/${radarFrames[currentFrameIndex]}/{z}/{x}/{y}/2/1_1.png`
+          'https://tile.open-meteo.com/weather-radar/{z}/{x}/{y}.png'
         ],
         tileSize: 256
       });
 
       map.addLayer({
-        id: 'rainviewer-layer',
+        id: 'openmeteo-radar-layer',
         type: 'raster',
-        source: 'rainviewer',
+        source: 'openmeteo-radar',
         layout: { visibility: 'none' },
         paint: { 'raster-opacity': 0.7 }
       });
-
-      document.getElementById('radarUpdate').textContent = new Date().toLocaleTimeString();
-    }
+    });
 
     function toggleRadar() {
       const checked = document.getElementById('radarCheckbox').checked;
-      map.setLayoutProperty('rainviewer-layer', 'visibility', checked ? 'visible' : 'none');
+      map.setLayoutProperty('openmeteo-radar-layer', 'visibility', checked ? 'visible' : 'none');
     }
 
-    function refreshRadar() {
-      addRadarLayer();
-    }
-
-    function setRadarFrame(index) {
-      currentFrameIndex = parseInt(index);
-      if (map.getSource('rainviewer')) {
-        map.getSource('rainviewer').tiles = [
-          `https://tilecache.rainviewer.com/v3/radar/${radarFrames[currentFrameIndex]}/{z}/{x}/{y}/2/1_1.png`
-        ];
-        map.style.sourceCaches['rainviewer'].clearTiles();
-        map.style.sourceCaches['rainviewer'].update(map.transform);
-      }
-    }
-
-    function togglePlay() {
-      isPlaying = !isPlaying;
-      document.getElementById('playBtn').innerText = isPlaying ? 'Pause' : 'Play';
-      if (isPlaying) {
-        playInterval = setInterval(() => {
-          currentFrameIndex = (currentFrameIndex + 1) % radarFrames.length;
-          document.getElementById('frameSlider').value = currentFrameIndex;
-          setRadarFrame(currentFrameIndex);
-        }, 500);
-      } else {
-        clearInterval(playInterval);
-      }
-    }
-
-    // Initialize radar
-    addRadarLayer();
-
-    // ---------------------------------------
-    // Course, aid stations, elevation chart...
-    // ---------------------------------------
+    // --- Aid Stations & Elevation Profile ---
     const aidStations = [
       { name: "Michigan Ditch (mile 11.4)", coords: [-105.8797, 40.4975], mile: 11.4 },
       { name: "Diamond Aid (mile 19.5)", coords: [-105.9081, 40.5039], mile: 19.5 },
