@@ -100,6 +100,7 @@
     });
     map.addControl(new mapboxgl.NavigationControl());
 
+    // Aid Stations
     const aidStations = [
       { name: "Michigan Ditch (mile 11.4)", coords: [-105.8797, 40.4975], mile: 11.4 },
       { name: "Diamond Aid (mile 19.5)", coords: [-105.9081, 40.5039], mile: 19.5 },
@@ -111,31 +112,33 @@
       { name: "Ranger Lakes Aid (63.6)", coords: [-105.9675, 40.5036], mile: 63.6 }
     ];
 
+    // Elevation chart vars
     let elevationChart;
     let elevationData = [];
     let elevationLabels = [];
     let coursePoints = [];
     let totalMiles = 0;
 
+    // Runner marker
     const runnerEl = document.createElement('div');
     runnerEl.className = 'runner-icon';
     runnerEl.textContent = '🏃';
     const liveMarker = new mapboxgl.Marker(runnerEl).setLngLat([-105.88, 40.51]);
 
     map.on('load', () => {
-      // Radar overlay
-      map.addSource('rainviewer', {
+      // Weather Radar Overlay (OpenWeatherMap)
+      map.addSource('owm-radar', {
         type: 'raster',
         tiles: [
-          'https://tilecache.rainviewer.com/v2/radar/{z}/{x}/{y}/256/1/1_1.png'
+          'https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=57e27e8b4f4e1584f19673bdc6d33547'
         ],
         tileSize: 256
       });
       map.addLayer({
-        id: 'rainviewer-layer',
+        id: 'owm-radar-layer',
         type: 'raster',
-        source: 'rainviewer',
-        layout: { visibility: 'none' }, // Start hidden
+        source: 'owm-radar',
+        layout: { visibility: 'none' },
         paint: { 'raster-opacity': 0.7 }
       });
 
@@ -212,7 +215,7 @@
 
     function toggleRadar() {
       const checked = document.getElementById('radarCheckbox').checked;
-      map.setLayoutProperty('rainviewer-layer', 'visibility', checked ? 'visible' : 'none');
+      map.setLayoutProperty('owm-radar-layer', 'visibility', checked ? 'visible' : 'none');
       document.getElementById('radarUpdate').textContent = new Date().toLocaleTimeString();
     }
 
