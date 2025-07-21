@@ -38,11 +38,15 @@
     map.addControl(new mapboxgl.NavigationControl());
 
     // 3. Aid Stations (Update coords as needed)
-    const aidStations = [
-      { name: "Ruby Jewel Aid", coords: [-105.888, 40.513] },
-      { name: "Clear Lake Aid", coords: [-105.914, 40.542] },
-      { name: "Diamond Aid", coords: [-105.952, 40.570] }
-    ];
+   const aidStations = [
+  { name: "Diamond Aid (mile 19.5)", coords: [-105.921469, 40.505442] },
+  { name: "Ruby Jewel Aid (mile 31.6)", coords: [-105.914, 40.513] },
+  { name: "Clear Lake Aid (~45)", coords: [-105.95, 40.542] },
+  { name: "Canadian Aid (mile 50.1)", coords: [-105.971943, 40.559134] },
+  { name: "Bockman Aid (mile 57.4)", coords: [-105.971943, 40.559134] },
+  { name: "Ranger Lakes Aid (~58.8)", coords: [-105.97, 40.57] }
+];
+
 
     map.on('load', () => {
       console.log("Map fully loaded!");
@@ -77,7 +81,7 @@
 
     async function updateLivePosition() {
       try {
-        const response = await fetch('https://share.garmin.com/Feed/Share/YOURNAME'); // <-- Replace YOURNAME
+        const response = await fetch('https://share.garmin.com/Feed/Share/DanFindley'); // <-- Replace YOURNAME
         const text = await response.text();
         const coordMatch = text.match(/<gx:coord>([-\d.]+) ([-\d.]+)/);
         if (coordMatch) {
