@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Never Summer Live Tracker</title>
+
+  <!-- Mapbox GL JS -->
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet" />
+
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; }
+    #map { width: 100%; height: 100%; }
+    .aid-marker {
+      background-color: #ff6600;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      border: 2px solid white;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script>
+    // 1. Your Mapbox Token
+    mapboxgl.accessToken = 'pk.eyJ1IjoiZmluczEyOSIsImEiOiJjbWRkYTAxcXIwMmdvMnJwc2xodjF4b3M5In0.58QcMA8Zo_BPNLORLz5Sug';
+
+    // 2. Initialize Map
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/outdoors-v12',
+      center: [-105.9, 40.5], // Rough center of course
+      zoom: 11
+    });
+    map.addControl(new mapboxgl.NavigationControl());
+
+    // 3. Aid Stations (Update coords as needed)
+    const aidStations = [
+      { name: "Ruby Jewel Aid", coords: [-105.888, 40.513] },
+      { name: "Clear Lake Aid", coords: [-105.914, 40.542] },
+      { name: "Diamond Aid", coords: [-105.952, 40.570] }
+    ];
+
+    map.on('load', () => {
+      console.log("Map fully loaded!");
+
+      // 4. Load Course GeoJSON
+      fetch('course.geojson')
+        .then(res => res.json())
+        .then(data => {
+          map.addSource('course', { type: 'geojson', data: data });
+          map.addLayer({
+            id: 'course-line',
+            type: 'line',
+            source: 'course',
+            paint: { 'line-color': '#FF0000', 'line-width': 3 }
+          });
+        })
+        .catch(err => console.error('Error loading course.geojson:', err));
+
+      // 5. Add Aid Station Markers
+      aidStations.forEach(station => {
+        const el = document.createElement('div');
+        el.className = 'aid-marker';
+        new mapboxgl.Marker(el)
+          .setLngLat(station.coords)
+          .setPopup(new mapboxgl.Popup().setText(station.name))
+          .addTo(map);
+      });
+    });
+
+    // 6. Live Garmin Tracking
+    const liveMarker = new mapboxgl.Marker({ color: 'blue' }).setLngLat([-105.888, 40.513]).addTo(map);
+
+    async function updateLivePosition() {
+      try {
+        const response = await fetch('https://share.garmin.com/Feed/Share/YOURNAME'); // <-- Replace YOURNAME
+        const text = await response.text();
+        const coordMatch = text.match(/<gx:coord>([-\d.]+) ([-\d.]+)/);
+        if (coordMatch) {
+          const lng = parseFloat(coordMatch[1]);
+          const lat = parseFloat(coordMatch[2]);
+          liveMarker.setLngLat([lng, lat]);
+          console.log('Updated live position:', [lng, lat]);
+        }
+      } catch (e) {
+        console.error('Error fetching Garmin position:', e);
+      }
+    }
+
+    // Update every 5 minutes
+    setInterval(updateLivePosition, 300000);
+    updateLivePosition(); // Initial load
+  </script>
+</body>
+</html>
