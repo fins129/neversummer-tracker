@@ -23,6 +23,7 @@
     #map {
       width: 100%;
       height: 70%;
+      position: relative;
     }
     #elevationChart {
       width: 100%;
@@ -36,10 +37,53 @@
       height: 16px;
       border: 2px solid white;
     }
+    .runner-icon {
+      font-size: 24px;
+      animation: bounce 1s infinite alternate;
+    }
+    @keyframes bounce {
+      0% { transform: translateY(0px); }
+      100% { transform: translateY(-5px); }
+    }
+    #infoPanel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      z-index: 999;
+    }
+    #radarToggle {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 6px 10px;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      z-index: 999;
+    }
+    #radarToggle:hover {
+      background: rgba(0, 0, 0, 0.9);
+    }
   </style>
 </head>
 <body>
-  <div id="map"></div>
+  <div id="map">
+    <div id="infoPanel">
+      Mile: <span id="mile">0</span> | 
+      Elev: <span id="elev">0</span> ft | 
+      Remain: <span id="remain">0</span> mi
+    </div>
+    <button id="radarToggle" onclick="toggleRadar()">Toggle Radar</button>
+  </div>
   <canvas id="elevationChart"></canvas>
 
   <script>
@@ -55,35 +99,53 @@
     });
     map.addControl(new mapboxgl.NavigationControl());
 
-    // 3. Aid Stations (decimal coordinates)
+    // 3. Aid Stations
     const aidStations = [
-      { name: "Michigan Ditch (mile 11.4)", coords: [-105.8797, 40.4975] },
-      { name: "Diamond Aid (mile 19.5)", coords: [-105.9081, 40.5039] },
-      { name: "Montgomery (mile 25.5)", coords: [-105.9139, 40.5542] },
-      { name: "Ruby Jewel Aid (mile 31.6)", coords: [-105.9633, 40.5842] },
-      { name: "Clear Lake 1&2 (40.9 & 45.3)", coords: [-106.0022, 40.6553] },
-      { name: "Canadian Aid (mile 51.5)", coords: [-106.0081, 40.6147] },
-      { name: "Bockman Aid (mile 57.4)", coords: [-105.9717, 40.5592] },
-      { name: "Ranger Lakes Aid (63.6)", coords: [-105.9675, 40.5036] }
+      { name: "Michigan Ditch (mile 11.4)", coords: [-105.8797, 40.4975], mile: 11.4 },
+      { name: "Diamond Aid (mile 19.5)", coords: [-105.9081, 40.5039], mile: 19.5 },
+      { name: "Montgomery (mile 25.5)", coords: [-105.9139, 40.5542], mile: 25.5 },
+      { name: "Ruby Jewel Aid (mile 31.6)", coords: [-105.9633, 40.5842], mile: 31.6 },
+      { name: "Clear Lake 1&2 (40.9 & 45.3)", coords: [-106.0022, 40.6553], mile: 40.9 },
+      { name: "Canadian Aid (mile 51.5)", coords: [-106.0081, 40.6147], mile: 51.5 },
+      { name: "Bockman Aid (mile 57.4)", coords: [-105.9717, 40.5592], mile: 57.4 },
+      { name: "Ranger Lakes Aid (63.6)", coords: [-105.9675, 40.5036], mile: 63.6 }
     ];
 
-    // 4. Variables for elevation chart
+    // 4. Elevation chart vars
     let elevationChart;
     let elevationData = [];
     let elevationLabels = [];
     let coursePoints = [];
+    let totalMiles = 0;
 
-    // 5. Map load
+    // 5. Runner marker (emoji)
+    const runnerEl = document.createElement('div');
+    runnerEl.className = 'runner-icon';
+    runnerEl.textContent = '🏃';
+    const liveMarker = new mapboxgl.Marker(runnerEl).setLngLat([-105.88, 40.51]);
+
+    // 6. Map Load
     map.on('load', () => {
-      console.log("Map fully loaded!");
+      // Add weather radar overlay
+      map.addSource('rainviewer', {
+        type: 'raster',
+        tiles: [
+          'https://tilecache.rainviewer.com/v2/radar/{z}/{x}/{y}/256/1/1_1.png'
+        ],
+        tileSize: 256
+      });
+      map.addLayer({
+        id: 'rainviewer-layer',
+        type: 'raster',
+        source: 'rainviewer',
+        paint: { 'raster-opacity': 0.6 }
+      });
 
-      // Draw course line
       fetch('course.geojson')
         .then(res => res.json())
         .then(data => {
           const coords = data.features[0].geometry.coordinates;
           let totalDist = 0;
-
           for (let i = 0; i < coords.length; i++) {
             if (i > 0) totalDist += distance(coords[i - 1], coords[i]);
             elevationLabels.push((totalDist / 1609.34).toFixed(2)); // miles
@@ -91,15 +153,28 @@
             elevationData.push(elevFeet);
             coursePoints.push(coords[i]);
           }
+          totalMiles = (totalDist / 1609.34).toFixed(1);
 
-          // Add course line
+          // Add course line with glow
           map.addSource('course', { type: 'geojson', data: data });
           map.addLayer({
             id: 'course-line',
             type: 'line',
             source: 'course',
-            paint: { 'line-color': '#FF0000', 'line-width': 3 }
+            paint: {
+              'line-color': '#FF4500',
+              'line-width': 4,
+              'line-blur': 1
+            }
           });
+
+          // Start & Finish markers
+          const startFlag = document.createElement('div');
+          startFlag.innerHTML = '🚩';
+          new mapboxgl.Marker(startFlag).setLngLat(coursePoints[0]).addTo(map);
+          const finishFlag = document.createElement('div');
+          finishFlag.innerHTML = '🏁';
+          new mapboxgl.Marker(finishFlag).setLngLat(coursePoints[coursePoints.length - 1]).addTo(map);
 
           // Build elevation chart
           const ctx = document.getElementById('elevationChart').getContext('2d');
@@ -125,23 +200,30 @@
               plugins: { legend: { display: false } }
             }
           });
-        })
-        .catch(err => console.error('Error loading course.geojson:', err));
 
-      // Add aid station markers
+          liveMarker.addTo(map);
+        });
+
+      // Add aid stations
       aidStations.forEach(station => {
         const el = document.createElement('div');
         el.className = 'aid-marker';
         new mapboxgl.Marker(el)
           .setLngLat(station.coords)
-          .setPopup(new mapboxgl.Popup().setText(station.name))
+          .setPopup(new mapboxgl.Popup().setHTML(
+            `<strong>${station.name}</strong><br>Mile: ${station.mile}`
+          ))
           .addTo(map);
       });
     });
 
-    // 6. Garmin Live Tracking
-    const liveMarker = new mapboxgl.Marker({ color: 'blue' }).setLngLat([-105.88, 40.51]).addTo(map);
+    // Radar toggle function
+    function toggleRadar() {
+      const visibility = map.getLayoutProperty('rainviewer-layer', 'visibility');
+      map.setLayoutProperty('rainviewer-layer', 'visibility', visibility === 'none' ? 'visible' : 'none');
+    }
 
+    // 7. Garmin Live Tracking
     async function updateLivePosition() {
       try {
         const response = await fetch('https://share.garmin.com/Feed/Share/DanFindley');
@@ -151,33 +233,38 @@
           const lng = parseFloat(coordMatch[1]);
           const lat = parseFloat(coordMatch[2]);
           liveMarker.setLngLat([lng, lat]);
-          console.log('Updated live position:', [lng, lat]);
           updateElevationMarker(lng, lat);
         }
       } catch (e) {
         console.error('Error fetching Garmin position:', e);
       }
     }
-
-    // Update every 5 minutes
     setInterval(updateLivePosition, 300000);
     updateLivePosition();
 
-    // 7. Elevation Marker
+    // 8. Elevation Marker & Info Panel
     function updateElevationMarker(lng, lat) {
       if (!elevationChart || coursePoints.length === 0) return;
 
       let minDist = Infinity;
       let closestIndex = 0;
+      let traveledDist = 0;
       for (let i = 0; i < coursePoints.length; i++) {
         const d = distance([lng, lat], coursePoints[i]);
+        if (i > 0) traveledDist += distance(coursePoints[i - 1], coursePoints[i]);
         if (d < minDist) {
           minDist = d;
           closestIndex = i;
         }
       }
+      const currentMile = (traveledDist / 1609.34).toFixed(1);
+      const currentElev = elevationData[closestIndex].toFixed(0);
+      const remainMiles = (totalMiles - currentMile).toFixed(1);
 
-      // Add red point on chart
+      document.getElementById('mile').textContent = currentMile;
+      document.getElementById('elev').textContent = currentElev;
+      document.getElementById('remain').textContent = remainMiles;
+
       elevationChart.data.datasets[1] = {
         label: 'Current Position',
         data: elevationData.map((val, idx) => idx === closestIndex ? val : null),
@@ -189,9 +276,9 @@
       elevationChart.update();
     }
 
-    // 8. Distance helper (meters)
+    // 9. Distance helper
     function distance(a, b) {
-      const R = 6371000; // meters
+      const R = 6371000;
       const toRad = x => x * Math.PI / 180;
       const dLat = toRad(b[1] - a[1]);
       const dLon = toRad(b[0] - a[0]);
