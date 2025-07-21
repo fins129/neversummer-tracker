@@ -153,8 +153,8 @@
     let coursePoints = [];
     let totalMiles = 0;
     let simIndex = 0;
-    let simInterval = null;
     let simRunning = true;
+    let simInterval = null;
 
     function addAidStations() {
       aidStations.forEach(station => {
@@ -170,13 +170,14 @@
     async function initCourse() {
       const data = await fetch('course.geojson').then(res => res.json());
       const coords = data.features[0].geometry.coordinates;
+
       let totalDist = 0;
       for (let i = 0; i < coords.length; i++) {
         if (i > 0) totalDist += distance(coords[i - 1], coords[i]);
         elevationLabels.push((totalDist / 1609.34).toFixed(2));
         const elevFeet = coords[i][2] ? coords[i][2] * 3.28084 : 0;
         elevationData.push(elevFeet);
-        coursePoints.push(coords[i]);
+        coursePoints.push(coords[i]); // [lng, lat, elev]
       }
       totalMiles = (totalDist / 1609.34).toFixed(1);
 
@@ -212,9 +213,9 @@
         }
       });
 
-      // Set runner start
+      // Runner starts at the first course point
       simIndex = 0;
-      const startLngLat = coursePoints[simIndex];
+      const startLngLat = [coursePoints[0][0], coursePoints[0][1]];
       liveMarker.setLngLat(startLngLat).addTo(map);
       updateElevationMarker(startLngLat[0], startLngLat[1]);
 
@@ -224,10 +225,10 @@
 
     function simulateRunner() {
       if (!simRunning || simIndex >= coursePoints.length) return;
-      const [lng, lat] = coursePoints[simIndex];
+      const [lng, lat] = [coursePoints[simIndex][0], coursePoints[simIndex][1]];
       liveMarker.setLngLat([lng, lat]);
       updateElevationMarker(lng, lat);
-      simIndex += Math.floor(coursePoints.length / 100); // Move ~1% of course each step
+      simIndex += Math.floor(coursePoints.length / 100); // ~1% of course per step
     }
 
     function toggleSimulation() {
