@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Never Summer Live Tracker + Open-Meteo Radar</title>
+  <title>Never Summer Live Tracker + OpenWeatherMap Radar</title>
 
   <!-- Mapbox -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
@@ -85,7 +85,7 @@
     <div id="radarControls">
       <label>
         <input type="checkbox" id="radarCheckbox" onchange="toggleRadar()" />
-        Show Weather Radar
+        Show Precipitation
       </label>
     </div>
   </div>
@@ -102,20 +102,20 @@
     });
     map.addControl(new mapboxgl.NavigationControl());
 
-    // --- Add Open-Meteo Radar Layer ---
+    // --- Add OpenWeatherMap Precipitation Layer ---
     map.on('load', () => {
-      map.addSource('openmeteo-radar', {
+      map.addSource('owm-precipitation', {
         type: 'raster',
         tiles: [
-          'https://tile.open-meteo.com/weather-radar/{z}/{x}/{y}.png'
+          'https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=57e27e8b4f4e1584f19673bdc6d33547'
         ],
         tileSize: 256
       });
 
       map.addLayer({
-        id: 'openmeteo-radar-layer',
+        id: 'owm-precipitation-layer',
         type: 'raster',
-        source: 'openmeteo-radar',
+        source: 'owm-precipitation',
         layout: { visibility: 'none' },
         paint: { 'raster-opacity': 0.7 }
       });
@@ -123,7 +123,7 @@
 
     function toggleRadar() {
       const checked = document.getElementById('radarCheckbox').checked;
-      map.setLayoutProperty('openmeteo-radar-layer', 'visibility', checked ? 'visible' : 'none');
+      map.setLayoutProperty('owm-precipitation-layer', 'visibility', checked ? 'visible' : 'none');
     }
 
     // --- Aid Stations & Elevation Profile ---
