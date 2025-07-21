@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Never Summer Live Tracker (Simulation Mode)</title>
+  <title>Never Summer Live Tracker (Debug)</title>
 
   <!-- Mapbox -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
@@ -30,13 +30,6 @@
       height: 30%;
       max-height: 300px;
     }
-    .aid-marker {
-      background-color: #ff6600;
-      border-radius: 50%;
-      width: 16px;
-      height: 16px;
-      border: 2px solid white;
-    }
     .runner-icon {
       font-size: 24px;
       animation: bounce 1s infinite alternate;
@@ -45,51 +38,10 @@
       0% { transform: translateY(0px); }
       100% { transform: translateY(-5px); }
     }
-    #infoPanel {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-family: Arial, sans-serif;
-      font-size: 14px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
-      z-index: 999;
-    }
-    #radarControls {
-      position: absolute;
-      top: 60px;
-      right: 10px;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 8px 12px;
-      border-radius: 8px;
-      font-size: 12px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
-      z-index: 999;
-      width: 160px;
-    }
-    #radarControls button {
-      margin-top: 5px;
-      width: 100%;
-    }
   </style>
 </head>
 <body>
-  <div id="map">
-    <div id="infoPanel">
-      Mile: <span id="mile">0</span> | 
-      Elev: <span id="elev">0</span> ft | 
-      Remain: <span id="remain">0</span> mi
-    </div>
-    <div id="radarControls">
-      <label>
-        <input type="checkbox" id="radarCheckbox" onchange="toggleRadar()" />
-        Show Precipitation
-      </label>
-      <button id="toggleSimBtn" onclick="toggleSimulation()">Pause Simulation</button>
-    </div>
-  </div>
+  <div id="map"></div>
   <canvas id="elevationChart"></canvas>
 
   <script>
@@ -101,183 +53,56 @@
       center: [-105.92, 40.52],
       zoom: 11
     });
-    map.addControl(new mapboxgl.NavigationControl());
-
-    // --- Precipitation Layer ---
-    map.on('load', () => {
-      map.addSource('owm-precipitation', {
-        type: 'raster',
-        tiles: [
-          'https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=57e27e8b4f4e1584f19673bdc6d33547'
-        ],
-        tileSize: 256
-      });
-
-      map.addLayer({
-        id: 'owm-precipitation-layer',
-        type: 'raster',
-        source: 'owm-precipitation',
-        layout: { visibility: 'none' },
-        paint: { 'raster-opacity': 0.7 }
-      });
-
-      addAidStations();
-      initCourse();
-    });
-
-    function toggleRadar() {
-      const checked = document.getElementById('radarCheckbox').checked;
-      map.setLayoutProperty('owm-precipitation-layer', 'visibility', checked ? 'visible' : 'none');
-    }
-
-    // --- Aid Stations ---
-    const aidStations = [
-      { name: "Michigan Ditch (mile 11.4)", coords: [-105.8797, 40.4975], mile: 11.4 },
-      { name: "Diamond Aid (mile 19.5)", coords: [-105.9081, 40.5039], mile: 19.5 },
-      { name: "Montgomery (mile 25.5)", coords: [-105.9139, 40.5542], mile: 25.5 },
-      { name: "Ruby Jewel Aid (mile 31.6)", coords: [-105.9633, 40.5842], mile: 31.6 },
-      { name: "Clear Lake 1&2 (40.9 & 45.3)", coords: [-106.0022, 40.6553], mile: 40.9 },
-      { name: "Canadian Aid (mile 51.5)", coords: [-106.0081, 40.6147], mile: 51.5 },
-      { name: "Bockman Aid (mile 57.4)", coords: [-105.9717, 40.5592], mile: 57.4 },
-      { name: "Ranger Lakes Aid (63.6)", coords: [-105.9675, 40.5036], mile: 63.6 }
-    ];
 
     const runnerEl = document.createElement('div');
     runnerEl.className = 'runner-icon';
     runnerEl.textContent = '🏃';
     const liveMarker = new mapboxgl.Marker(runnerEl);
 
-    let elevationChart;
-    let elevationData = [];
-    let elevationLabels = [];
     let coursePoints = [];
-    let totalMiles = 0;
-    let simIndex = 0;
-    let simRunning = true;
-    let simInterval = null;
 
-    function addAidStations() {
-      aidStations.forEach(station => {
-        const el = document.createElement('div');
-        el.className = 'aid-marker';
-        new mapboxgl.Marker(el)
-          .setLngLat(station.coords)
-          .setPopup(new mapboxgl.Popup().setHTML(`<strong>${station.name}</strong><br>Mile: ${station.mile}`))
-          .addTo(map);
-      });
-    }
+    map.on('load', () => {
+      console.log("Map fully loaded.");
+      initCourse();
+    });
 
     async function initCourse() {
-      const data = await fetch('course.geojson').then(res => res.json());
-      const coords = data.features[0].geometry.coordinates;
+      console.log("Fetching course.geojson...");
+      const data = await fetch('course.geojson').then(res => res.json()).catch(err => {
+        console.error("Failed to load course.geojson", err);
+      });
 
-      let totalDist = 0;
-      for (let i = 0; i < coords.length; i++) {
-        if (i > 0) totalDist += distance(coords[i - 1], coords[i]);
-        elevationLabels.push((totalDist / 1609.34).toFixed(2));
-        const elevFeet = coords[i][2] ? coords[i][2] * 3.28084 : 0;
-        elevationData.push(elevFeet);
-        coursePoints.push(coords[i]); // [lng, lat, elev]
+      if (!data || !data.features || !data.features.length) {
+        console.error("GeoJSON is empty or invalid", data);
+        return;
       }
-      totalMiles = (totalDist / 1609.34).toFixed(1);
 
+      console.log("GeoJSON loaded:", data);
+      const coords = data.features[0].geometry.coordinates;
+      console.log(`Number of points in course: ${coords.length}`);
+      console.log("First 5 coordinates:", coords.slice(0, 5));
+
+      // Populate coursePoints
+      coursePoints = coords.map(pt => [pt[0], pt[1]]);
+
+      // Add course line
       map.addSource('course', { type: 'geojson', data: data });
       map.addLayer({
         id: 'course-line',
         type: 'line',
         source: 'course',
-        paint: { 'line-color': '#FF4500', 'line-width': 4, 'line-blur': 1 }
+        paint: { 'line-color': '#FF4500', 'line-width': 4 }
       });
 
-      const ctx = document.getElementById('elevationChart').getContext('2d');
-      elevationChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: elevationLabels,
-          datasets: [{
-            label: 'Elevation (ft)',
-            data: elevationData,
-            borderColor: 'blue',
-            fill: false,
-            pointRadius: 0
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: { title: { display: true, text: 'Distance (mi)' } },
-            y: { title: { display: true, text: 'Elevation (ft)' } }
-          },
-          plugins: { legend: { display: false } }
-        }
-      });
+      // Place the runner at the first point
+      const start = coursePoints[0];
+      console.log("Setting runner marker to:", start);
+      liveMarker.setLngLat(start).addTo(map);
 
-      // Runner starts at the first course point
-      simIndex = 0;
-      const startLngLat = [coursePoints[0][0], coursePoints[0][1]];
-      liveMarker.setLngLat(startLngLat).addTo(map);
-      updateElevationMarker(startLngLat[0], startLngLat[1]);
-
-      // Start simulation
-      simInterval = setInterval(simulateRunner, 2000);
-    }
-
-    function simulateRunner() {
-      if (!simRunning || simIndex >= coursePoints.length) return;
-      const [lng, lat] = [coursePoints[simIndex][0], coursePoints[simIndex][1]];
-      liveMarker.setLngLat([lng, lat]);
-      updateElevationMarker(lng, lat);
-      simIndex += Math.floor(coursePoints.length / 100); // ~1% of course per step
-    }
-
-    function toggleSimulation() {
-      simRunning = !simRunning;
-      document.getElementById('toggleSimBtn').textContent = simRunning ? "Pause Simulation" : "Resume Simulation";
-    }
-
-    function updateElevationMarker(lng, lat) {
-      if (!elevationChart || coursePoints.length === 0) return;
-      let minDist = Infinity;
-      let closestIndex = 0;
-      let traveledDist = 0;
-      for (let i = 0; i < coursePoints.length; i++) {
-        const d = distance([lng, lat], coursePoints[i]);
-        if (i > 0) traveledDist += distance(coursePoints[i - 1], coursePoints[i]);
-        if (d < minDist) {
-          minDist = d;
-          closestIndex = i;
-        }
-      }
-      const currentMile = (traveledDist / 1609.34).toFixed(1);
-      const currentElev = elevationData[closestIndex].toFixed(0);
-      const remainMiles = (totalMiles - currentMile).toFixed(1);
-
-      document.getElementById('mile').textContent = currentMile;
-      document.getElementById('elev').textContent = currentElev;
-      document.getElementById('remain').textContent = remainMiles;
-
-      elevationChart.data.datasets[1] = {
-        label: 'Current Position',
-        data: elevationData.map((val, idx) => idx === closestIndex ? val : null),
-        borderColor: 'red',
-        backgroundColor: 'red',
-        pointRadius: 5,
-        showLine: false
-      };
-      elevationChart.update();
-    }
-
-    function distance(a, b) {
-      const R = 6371000;
-      const toRad = x => x * Math.PI / 180;
-      const dLat = toRad(b[1] - a[1]);
-      const dLon = toRad(b[0] - a[0]);
-      const lat1 = toRad(a[1]);
-      const lat2 = toRad(b[1]);
-      const x = dLon * Math.cos((lat1 + lat2) / 2);
-      const y = dLat;
-      return Math.sqrt(x * x + y * y) * R;
+      // Debug check if marker is on map
+      setTimeout(() => {
+        console.log("Marker current position:", liveMarker.getLngLat());
+      }, 1000);
     }
   </script>
 </body>
