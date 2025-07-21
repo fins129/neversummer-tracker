@@ -14,20 +14,23 @@
 
   <style>
     body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-    }
-    #map {
-      width: 100%;
-      height: 70%;
-    }
-    #elevationChart {
-      width: 100%;
-      height: 30%;
-    }
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+#map {
+  width: 100%;
+  height: 70%;  /* Map gets 70% of screen height */
+}
+
+#elevationChart {
+  width: 100%;
+  height: 30%;  /* Chart gets 30% of screen height */
+  max-height: 300px; /* Optional: cap height on large screens */
+}
     .aid-marker {
       background-color: #ff6600;
       border-radius: 50%;
