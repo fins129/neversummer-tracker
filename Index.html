@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Never Summer Live Tracker (Test Location)</title>
+  <title>Never Summer Live Tracker (Simulation Mode)</title>
 
   <!-- Mapbox -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
@@ -69,10 +69,6 @@
       z-index: 999;
       width: 160px;
     }
-    #radarControls button {
-      margin-top: 5px;
-      width: 100%;
-    }
   </style>
 </head>
 <body>
@@ -117,15 +113,9 @@
         type: 'raster',
         source: 'owm-precipitation',
         layout: { visibility: 'none' },
-        paint: {
-          'raster-opacity': 0.75,
-          'raster-hue-rotate': 100,
-          'raster-saturation': 2,
-          'raster-brightness-max': 1.2
-        }
+        paint: { 'raster-opacity': 0.7 }  // Clean default
       });
 
-      // Aid stations
       addAidStations();
       initCourse();
     });
@@ -157,6 +147,7 @@
     let elevationLabels = [];
     let coursePoints = [];
     let totalMiles = 0;
+    let simIndex = 0;
 
     function addAidStations() {
       aidStations.forEach(station => {
@@ -190,10 +181,6 @@
         paint: { 'line-color': '#FF4500', 'line-width': 4, 'line-blur': 1 }
       });
 
-      // Start/Finish markers
-      new mapboxgl.Marker().setLngLat(coursePoints[0]).setPopup(new mapboxgl.Popup().setText("Start")).addTo(map);
-      new mapboxgl.Marker().setLngLat(coursePoints[coursePoints.length - 1]).setPopup(new mapboxgl.Popup().setText("Finish")).addTo(map);
-
       const ctx = document.getElementById('elevationChart').getContext('2d');
       elevationChart = new Chart(ctx, {
         type: 'line',
@@ -218,10 +205,18 @@
         }
       });
 
-      // Simulated location (Diamond Aid)
-      const testLocation = [-105.9081, 40.5039];
-      liveMarker.setLngLat(testLocation).addTo(map);
-      updateElevationMarker(testLocation[0], testLocation[1]);
+      liveMarker.setLngLat(coursePoints[0]).addTo(map);
+
+      // Start simulation
+      setInterval(simulateRunner, 2000);
+    }
+
+    function simulateRunner() {
+      if (simIndex >= coursePoints.length) return;
+      const [lng, lat] = coursePoints[simIndex];
+      liveMarker.setLngLat([lng, lat]);
+      updateElevationMarker(lng, lat);
+      simIndex += Math.floor(coursePoints.length / 100); // jump by ~1% each step
     }
 
     function updateElevationMarker(lng, lat) {
