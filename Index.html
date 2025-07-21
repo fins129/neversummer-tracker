@@ -86,7 +86,7 @@
           for (let i = 0; i < coords.length; i++) {
             if (i > 0) totalDist += distance(coords[i - 1], coords[i]);
             elevationLabels.push((totalDist / 1000).toFixed(2)); // km
-            elevationData.push(coords[i][2] || 0);
+            elevationData.push(coords[i][2] ? coords[i][2] : 0); // elevation
             coursePoints.push(coords[i]);
           }
 
