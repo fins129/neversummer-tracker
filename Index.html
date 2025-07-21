@@ -67,6 +67,11 @@
       font-size: 12px;
       box-shadow: 0 0 5px rgba(0,0,0,0.3);
       z-index: 999;
+      width: 160px;
+    }
+    #radarControls button, #radarControls input[type=range] {
+      margin-top: 5px;
+      width: 100%;
     }
   </style>
 </head>
@@ -82,16 +87,17 @@
         <input type="checkbox" id="radarCheckbox" onchange="toggleRadar()" />
         Show Weather Radar
       </label>
+      <button onclick="refreshRadar()">Refresh Radar</button>
+      <button onclick="togglePlay()" id="playBtn">Play</button>
+      <input type="range" id="frameSlider" min="0" max="11" value="11" onchange="setRadarFrame(this.value)">
       <div style="margin-top:4px;font-size:11px;">Last Update: <span id="radarUpdate">Never</span></div>
     </div>
   </div>
   <canvas id="elevationChart"></canvas>
 
   <script>
-    // Mapbox token
     mapboxgl.accessToken = 'pk.eyJ1IjoiZmluczEyOSIsImEiOiJjbWRkYTAxcXIwMmdvMnJwc2xodjF4b3M5In0.58QcMA8Zo_BPNLORLz5Sug';
 
-    // Initialize Map
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/mapbox/outdoors-v12',
@@ -100,7 +106,82 @@
     });
     map.addControl(new mapboxgl.NavigationControl());
 
-    // Aid Stations
+    let radarFrames = [];
+    let currentFrameIndex = 11;
+    let isPlaying = false;
+    let playInterval = null;
+
+    // Fetch and build radar animation
+    async function addRadarLayer() {
+      const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+      const json = await response.json();
+      radarFrames = json.radar.nowcast.slice(-12); // last 12 frames
+
+      // Add first radar layer
+      if (map.getSource('rainviewer')) {
+        map.removeLayer('rainviewer-layer');
+        map.removeSource('rainviewer');
+      }
+
+      map.addSource('rainviewer', {
+        type: 'raster',
+        tiles: [
+          `https://tilecache.rainviewer.com/v3/radar/${radarFrames[currentFrameIndex]}/{z}/{x}/{y}/2/1_1.png`
+        ],
+        tileSize: 256
+      });
+
+      map.addLayer({
+        id: 'rainviewer-layer',
+        type: 'raster',
+        source: 'rainviewer',
+        layout: { visibility: 'none' },
+        paint: { 'raster-opacity': 0.7 }
+      });
+
+      document.getElementById('radarUpdate').textContent = new Date().toLocaleTimeString();
+    }
+
+    function toggleRadar() {
+      const checked = document.getElementById('radarCheckbox').checked;
+      map.setLayoutProperty('rainviewer-layer', 'visibility', checked ? 'visible' : 'none');
+    }
+
+    function refreshRadar() {
+      addRadarLayer();
+    }
+
+    function setRadarFrame(index) {
+      currentFrameIndex = parseInt(index);
+      if (map.getSource('rainviewer')) {
+        map.getSource('rainviewer').tiles = [
+          `https://tilecache.rainviewer.com/v3/radar/${radarFrames[currentFrameIndex]}/{z}/{x}/{y}/2/1_1.png`
+        ];
+        map.style.sourceCaches['rainviewer'].clearTiles();
+        map.style.sourceCaches['rainviewer'].update(map.transform);
+      }
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      document.getElementById('playBtn').innerText = isPlaying ? 'Pause' : 'Play';
+      if (isPlaying) {
+        playInterval = setInterval(() => {
+          currentFrameIndex = (currentFrameIndex + 1) % radarFrames.length;
+          document.getElementById('frameSlider').value = currentFrameIndex;
+          setRadarFrame(currentFrameIndex);
+        }, 500);
+      } else {
+        clearInterval(playInterval);
+      }
+    }
+
+    // Initialize radar
+    addRadarLayer();
+
+    // ---------------------------------------
+    // Course, aid stations, elevation chart...
+    // ---------------------------------------
     const aidStations = [
       { name: "Michigan Ditch (mile 11.4)", coords: [-105.8797, 40.4975], mile: 11.4 },
       { name: "Diamond Aid (mile 19.5)", coords: [-105.9081, 40.5039], mile: 19.5 },
@@ -112,37 +193,18 @@
       { name: "Ranger Lakes Aid (63.6)", coords: [-105.9675, 40.5036], mile: 63.6 }
     ];
 
-    // Elevation chart vars
     let elevationChart;
     let elevationData = [];
     let elevationLabels = [];
     let coursePoints = [];
     let totalMiles = 0;
 
-    // Runner marker
     const runnerEl = document.createElement('div');
     runnerEl.className = 'runner-icon';
     runnerEl.textContent = '🏃';
     const liveMarker = new mapboxgl.Marker(runnerEl).setLngLat([-105.88, 40.51]);
 
     map.on('load', () => {
-      // Weather Radar Overlay (OpenWeatherMap)
-      map.addSource('owm-radar', {
-        type: 'raster',
-        tiles: [
-          'https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=57e27e8b4f4e1584f19673bdc6d33547'
-        ],
-        tileSize: 256
-      });
-      map.addLayer({
-        id: 'owm-radar-layer',
-        type: 'raster',
-        source: 'owm-radar',
-        layout: { visibility: 'none' },
-        paint: { 'raster-opacity': 0.7 }
-      });
-
-      // Load course
       fetch('course.geojson')
         .then(res => res.json())
         .then(data => {
@@ -150,14 +212,13 @@
           let totalDist = 0;
           for (let i = 0; i < coords.length; i++) {
             if (i > 0) totalDist += distance(coords[i - 1], coords[i]);
-            elevationLabels.push((totalDist / 1609.34).toFixed(2)); // miles
-            const elevFeet = coords[i][2] ? coords[i][2] * 3.28084 : 0; // feet
+            elevationLabels.push((totalDist / 1609.34).toFixed(2));
+            const elevFeet = coords[i][2] ? coords[i][2] * 3.28084 : 0;
             elevationData.push(elevFeet);
             coursePoints.push(coords[i]);
           }
           totalMiles = (totalDist / 1609.34).toFixed(1);
 
-          // Add course line
           map.addSource('course', { type: 'geojson', data: data });
           map.addLayer({
             id: 'course-line',
@@ -166,7 +227,6 @@
             paint: { 'line-color': '#FF4500', 'line-width': 4, 'line-blur': 1 }
           });
 
-          // Start & Finish
           const startFlag = document.createElement('div');
           startFlag.innerHTML = '🚩';
           new mapboxgl.Marker(startFlag).setLngLat(coursePoints[0]).addTo(map);
@@ -174,7 +234,6 @@
           finishFlag.innerHTML = '🏁';
           new mapboxgl.Marker(finishFlag).setLngLat(coursePoints[coursePoints.length - 1]).addTo(map);
 
-          // Elevation chart
           const ctx = document.getElementById('elevationChart').getContext('2d');
           elevationChart = new Chart(ctx, {
             type: 'line',
@@ -202,7 +261,6 @@
           liveMarker.addTo(map);
         });
 
-      // Aid stations
       aidStations.forEach(station => {
         const el = document.createElement('div');
         el.className = 'aid-marker';
@@ -213,13 +271,6 @@
       });
     });
 
-    function toggleRadar() {
-      const checked = document.getElementById('radarCheckbox').checked;
-      map.setLayoutProperty('owm-radar-layer', 'visibility', checked ? 'visible' : 'none');
-      document.getElementById('radarUpdate').textContent = new Date().toLocaleTimeString();
-    }
-
-    // Garmin live updates
     async function updateLivePosition() {
       try {
         const response = await fetch('https://share.garmin.com/Feed/Share/DanFindley');
