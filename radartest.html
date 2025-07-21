@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RainViewer Radar Test</title>
+
+  <!-- Mapbox -->
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet" />
+
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 10px;
+      border-radius: 6px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.3);
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="controls">
+    <button onclick="loadRadar()">Refresh Radar</button>
+    <div style="margin-top: 5px;">Last Frame: <span id="lastFrame">Loading...</span></div>
+  </div>
+
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoiZmluczEyOSIsImEiOiJjbWRkYTAxcXIwMmdvMnJwc2xodjF4b3M5In0.58QcMA8Zo_BPNLORLz5Sug';
+
+    const map = new mapboxgl.Map({
+      container: 'map',
+      style: 'mapbox://styles/mapbox/light-v11',
+      center: [-105.5, 39.5], // Center on Colorado
+      zoom: 6
+    });
+
+    async function loadRadar() {
+      try {
+        const response = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+        const json = await response.json();
+
+        // Use latest timestamp from nowcast
+        const nowcastFrames = json.radar.nowcast;
+        if (!nowcastFrames || nowcastFrames.length === 0) {
+          document.getElementById('lastFrame').textContent = "No radar data";
+          return;
+        }
+
+        const latestTimestamp = nowcastFrames[nowcastFrames.length - 1].time;
+        document.getElementById('lastFrame').textContent =
+          new Date(latestTimestamp * 1000).toLocaleTimeString();
+
+        // Remove old layer if exists
+        if (map.getSource('rainviewer')) {
+          map.removeLayer('rainviewer-layer');
+          map.removeSource('rainviewer');
+        }
+
+        // Add radar source with v2 tile URL
+        map.addSource('rainviewer', {
+          type: 'raster',
+          tiles: [
+            `https://tilecache.rainviewer.com/v2/radar/${latestTimestamp}/256/{z}/{x}/{y}/2/1_1.png`
+          ],
+          tileSize: 256
+        });
+
+        map.addLayer({
+          id: 'rainviewer-layer',
+          type: 'raster',
+          source: 'rainviewer',
+          paint: { 'raster-opacity': 0.7 }
+        });
+      } catch (err) {
+        console.error("Radar load failed:", err);
+        document.getElementById('lastFrame').textContent = "Radar error";
+      }
+    }
+
+    map.on('load', loadRadar);
+  </script>
+</body>
+</html>
